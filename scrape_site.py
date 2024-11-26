@@ -3,6 +3,45 @@ import os
 
 from crawlee.playwright_crawler import PlaywrightCrawler, PlaywrightCrawlingContext
 
+# JavaScript to prevent navigation-like actions
+JS_PREVENT_NAVIGATION = """
+    // Prevent navigation and simulate clicking all buttons and triggering onclick events
+    document.querySelectorAll('button, [onclick], a, form, [data-navigation="true"], [data-back="true"]').forEach(element => {
+        // Handle dynamic prevention of navigation-like actions
+        const isNavigationElement = element.tagName.toLowerCase() === 'a' && element.href 
+                                    || element.hasAttribute('data-navigation') 
+                                    || element.id === 'CLOSE_WINDOW';  // Add more custom conditions if needed
+        
+        // If it's an element that might cause navigation, prevent it
+        if (isNavigationElement) {
+            element.addEventListener('click', function(event) {
+                event.preventDefault();  // Prevent the default navigation
+                if (typeof element.onclick === 'function') {
+                    element.onclick();  // Trigger onclick if defined
+                }
+            });
+        }
+        // Prevent form submissions
+        else if (element.tagName.toLowerCase() === 'form') {
+            element.addEventListener('submit', function(event) {
+                event.preventDefault();  // Prevent form submission
+                if (typeof element.onclick === 'function') {
+                    element.onclick();  // Trigger onclick if defined
+                }
+            });
+        }
+        // Simulate button clicks
+        else if (element.tagName.toLowerCase() === 'button') {
+            element.click();
+        }
+
+        // Trigger onclick for other elements
+        else if (typeof element.onclick === 'function') {
+            element.onclick();
+        }
+    });
+"""
+
 async def main() -> None:
     # Create a folder to save the text files if it doesn't exist
     output_folder = "page_texts"
@@ -19,6 +58,9 @@ async def main() -> None:
     async def request_handler(context: PlaywrightCrawlingContext) -> None:
         context.log.info(f'Processing {context.request.url} ...')
 
+        # Inject the JS to prevent navigation-like actions before grabbing the page content
+        await context.page.evaluate(JS_PREVENT_NAVIGATION)
+
         # Extract the HTML body content using Playwright
         body_content = await context.page.eval_on_selector("body", "element => element.innerHTML")
 
@@ -34,7 +76,7 @@ async def main() -> None:
         await context.enqueue_links()
 
     # Run the crawler with the initial list of requests.
-    await crawler.run(['https://lucas.lboro.ac.uk/pub-apx/f?p=303:107::APEX_CLONE_SESSION::107:PROG_CODE,PROG_YEAR,SPEC_YEAR:BSUB10,24,24'])
+    await crawler.run(['https://lucas.lboro.ac.uk/pub-apx/f?p=303:1:::::P1_SEARCH_YEAR:24'])
 
 
 if __name__ == '__main__':
